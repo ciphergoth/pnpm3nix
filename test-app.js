@@ -1,8 +1,19 @@
-const lodash = require('./result/lodash.js');
+const assert = require('assert');
 
-console.log('Testing lodash import...');
-console.log('lodash.chunk([1,2,3,4,5], 2):', lodash.chunk([1,2,3,4,5], 2));
-console.log('lodash.uniq([1,1,2,3,3]):', lodash.uniq([1,1,2,3,3]));
-console.log('lodash.capitalize("hello world"):', lodash.capitalize("hello world"));
+function runTests() {
+  console.log('Running automated tests for lodash package...');
+  
+  // Test 1: lodash module loads successfully
+  const lodash = require('./result/lodash.js');
+  console.log('✓ lodash import successful');
+  
+  // Test 2: lodash.chunk works correctly
+  const chunkResult = lodash.chunk([1,2,3,4,5], 2);
+  const expectedChunk = [[1,2], [3,4], [5]];
+  assert.deepStrictEqual(chunkResult, expectedChunk, 'chunk result should match expected output');
+  console.log('✓ lodash.chunk works correctly');
+    
+  console.log('\n🎉 All tests passed successfully!');
+}
 
-console.log('✓ Lodash import and usage successful!');
+runTests();
