@@ -1,8 +1,9 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  # Import the dynamic derivation generator
-  dynamicDerivations = import ./dynamic-derivations.nix { inherit pkgs; };
+  # Import the dynamic derivation generator function
+  pnpm2nix = import ./dynamic-derivations.nix { inherit pkgs; };
+  dynamicDerivations = pnpm2nix ./test-project/pnpm-lock.yaml;
   packageDerivations = dynamicDerivations.packageDerivations;
   
   # Build the test project with proper node_modules structure

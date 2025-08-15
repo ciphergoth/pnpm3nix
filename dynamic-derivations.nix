@@ -1,10 +1,12 @@
 { pkgs ? import <nixpkgs> {} }:
 
+lockfilePath:
+
 let
   # Parse lockfile using yaml2json
   lockfileData = builtins.fromJSON (builtins.readFile (pkgs.runCommand "lockfile.json" {
     nativeBuildInputs = [ pkgs.yaml2json ];
-    src = ./test-project/pnpm-lock.yaml;
+    src = lockfilePath;
   } ''yaml2json < $src > $out''));
   
   packages = lockfileData.packages;
