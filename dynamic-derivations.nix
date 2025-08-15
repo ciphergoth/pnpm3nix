@@ -1,24 +1,14 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  # Convert YAML to JSON using yaml2json
-  lockfileJsonFile = pkgs.runCommand "lockfile.json" {
+  # Parse lockfile using yaml2json
+  lockfileData = builtins.fromJSON (builtins.readFile (pkgs.runCommand "lockfile.json" {
     nativeBuildInputs = [ pkgs.yaml2json ];
-  } ''
-    yaml2json < ${./test-project/pnpm-lock.yaml} > $out
-  '';
-
-  # Use Import From Derivation (IFD) to read the JSON at evaluation time
-  lockfileData = builtins.fromJSON (builtins.readFile lockfileJsonFile);
+    src = ./test-project/pnpm-lock.yaml;
+  } ''yaml2json < $src > $out''));
+  
   packages = lockfileData.packages;
   
-  # Helper to convert SHA512 integrity hash to SHA256 for nix
-  convertIntegrityToSha256 = integrity:
-    # For now, we'll use the hardcoded sha256 we know works
-    # TODO: Properly convert integrity hashes
-    if (builtins.hasAttr "lodash@4.17.21" packages)
-    then "sha256-agh6yeVwKgydYPvNSGlgEmRuyN8Ukd6kcrFQ55/K+AQ="
-    else throw "Unknown package integrity conversion needed";
 
   # Helper function to build a package derivation from lockfile data
   buildPackageFromLockfile = name: info:
@@ -29,7 +19,6 @@ let
       version = builtins.elemAt (builtins.match ".*@([^@]+)" name) 0;
       
       integrity = info.resolution.integrity or "";
-      sha256 = convertIntegrityToSha256 integrity;
       
     in pkgs.stdenv.mkDerivation {
       pname = packageName;
@@ -37,7 +26,7 @@ let
       
       src = pkgs.fetchurl {
         url = "https://registry.npmjs.org/${packageName}/-/${packageName}-${version}.tgz";
-        inherit sha256;
+        hash = integrity;
       };
       
       dontBuild = true;
