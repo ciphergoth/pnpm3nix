@@ -14,10 +14,10 @@ nix-build package-with-deps.nix
 echo "🧪 Running dependency tests..."
 nix-shell --run "node test-deps.js"
 
-echo "🔧 Building lodash from lockfile (dynamic)..."
-nix-build -A lodash dynamic-derivations.nix
+echo "🔧 Building test-project with lockfile-generated dependencies..."
+nix-build test-project.nix
 
-echo "🧪 Running lockfile-driven tests..."
-nix-shell --run "node test-lockfile.js"
+echo "🧪 Running project tests..."
+nix-shell --run "cd result && node test.js"
 
 echo "✅ All tests completed successfully!"

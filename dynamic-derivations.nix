@@ -49,7 +49,4 @@ in {
   
   # The actual derivations
   inherit packageDerivations;
-  
-  # Specifically expose lodash for testing
-  lodash = packageDerivations."lodash@4.17.21" or null;
 }
