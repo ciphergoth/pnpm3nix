@@ -12,10 +12,12 @@ let
   projectDevDeps = lockfileData.importers.".".devDependencies or {};
   allProjectDeps = projectDeps // projectDevDeps;
   
-  # Create symlink commands for all dependencies, handling scoped packages
+  # Create symlink commands for all dependencies, handling scoped packages and workspaces
   symlinkCommands = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depInfo: 
     let 
-      depKey = "${depName}@${depInfo.version}";
+      # For workspace dependencies, use just the name; for npm packages, use name@version
+      isWorkspace = builtins.substring 0 5 depInfo.version == "link:";
+      depKey = if isWorkspace then depName else "${depName}@${depInfo.version}";
       depDerivation = builtins.getAttr depKey packageDerivations;
       isScoped = builtins.substring 0 1 depName == "@";
     in if isScoped 

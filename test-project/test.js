@@ -32,6 +32,15 @@ function runProjectTests() {
   assert(!is.string(123), 'is.string should return false for numbers');
   console.log('✓ @sindresorhus/is functionality works correctly');
   
+  // Test: Can import workspace package from node_modules
+  const utils = require('utils');
+  console.log('✓ Workspace utils import successful from node_modules');
+  
+  // Test: Workspace package functionality works
+  const greeting = utils.greet('World');
+  assert.strictEqual(greeting, 'Hello, World!', 'utils.greet should work correctly');
+  console.log('✓ Workspace utils functionality works correctly');
+  
   console.log('\n🎉 Project tests passed successfully!');
 }
 

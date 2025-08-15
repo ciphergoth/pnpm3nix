@@ -11,68 +11,122 @@ let
   
   packages = lockfileData.packages;
   snapshots = lockfileData.snapshots or {};
+  importers = lockfileData.importers;
   
+  # Get the directory containing the lockfile for resolving workspace paths
+  lockfileDir = builtins.dirOf lockfilePath;
+  
+  # Extract workspace packages from importers that have link: dependencies
+  workspacePackages = builtins.listToAttrs (builtins.concatLists (builtins.attrValues (builtins.mapAttrs (importerPath: importerData:
+    let
+      deps = importerData.dependencies or {};
+      linkDeps = builtins.filter (dep: 
+        let depInfo = builtins.getAttr dep deps;
+        in builtins.hasAttr "version" depInfo && builtins.substring 0 5 depInfo.version == "link:"
+      ) (builtins.attrNames deps);
+    in builtins.map (depName:
+      let 
+        depInfo = builtins.getAttr depName deps;
+        linkPath = builtins.substring 5 (builtins.stringLength depInfo.version) depInfo.version; # Remove "link:" prefix
+        workspacePath = "${lockfileDir}/${linkPath}";
+      in {
+        name = depName;
+        value = {
+          path = workspacePath;
+          version = "workspace";
+        };
+      }
+    ) linkDeps
+  ) importers)));
+  
+
+  # Combine npm packages and workspace packages
+  allPackages = packages // (builtins.mapAttrs (name: wsInfo: {
+    # Workspace packages don't have resolution info, we'll handle them specially
+    isWorkspace = true;
+    path = wsInfo.path;
+  }) workspacePackages);
 
   # Generate all package derivations using recursive set
   packageDerivations = pkgs.lib.fix (self: builtins.mapAttrs (name: info:
-    let
-      # Parse package@version format, handling scoped packages
-      versionMatch = builtins.match ".*@([^@]+)" name;
-      version = builtins.elemAt versionMatch 0;
-      atIndex = builtins.stringLength name - 1 - (builtins.stringLength version);
-      fullPackageName = builtins.substring 0 atIndex name;
-      
-      # For scoped packages like @types/node, extract scope and package name
-      isScoped = builtins.substring 0 1 fullPackageName == "@";
-      scopeAndPackage = if isScoped 
-        then builtins.match "@([^/]+)/(.+)" fullPackageName
-        else null;
-      
-      packageName = fullPackageName;
-      tarballName = if isScoped 
-        then builtins.elemAt scopeAndPackage 1  # Just the package part for tarball
-        else fullPackageName;
-      
-      integrity = info.resolution.integrity or "";
-      
-      # Get dependencies for this package from snapshots
-      packageSnapshots = snapshots.${name} or {};
-      packageDependencies = packageSnapshots.dependencies or {};
-      
-    in pkgs.stdenv.mkDerivation {
-      pname = packageName;
-      version = version;
-      
-      src = pkgs.fetchurl {
-        url = "https://registry.npmjs.org/${packageName}/-/${tarballName}-${version}.tgz";
-        hash = integrity;
-      };
-      
-      dontBuild = true;
-      
-      installPhase = ''
-        mkdir -p $out
-        tar -xzf $src --strip-components=1 -C $out
+    if info.isWorkspace or false then
+      # Handle workspace packages
+      let
+        workspaceInfo = builtins.getAttr name workspacePackages;
+      in pkgs.stdenv.mkDerivation {
+        pname = name;
+        version = "workspace";
         
-        # Create node_modules with dependencies if any exist
-        if [ ${toString (builtins.length (builtins.attrNames packageDependencies))} -gt 0 ]; then
-          mkdir -p $out/node_modules
-          ${builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depVersion: 
-            let 
-              depKey = "${depName}@${depVersion}";
-              depDerivation = builtins.getAttr depKey self;
-            in "ln -s ${depDerivation} $out/node_modules/${depName}"
-          ) packageDependencies))}
-        fi
-      '';
-    }
-  ) packages);
+        src = workspaceInfo.path;
+        
+        dontBuild = true;
+        
+        installPhase = ''
+          mkdir -p $out
+          cp -r $src/* $out/
+        '';
+      }
+    else
+      # Handle npm packages
+      let
+        # Parse package@version format, handling scoped packages
+        versionMatch = builtins.match ".*@([^@]+)" name;
+        version = builtins.elemAt versionMatch 0;
+        atIndex = builtins.stringLength name - 1 - (builtins.stringLength version);
+        fullPackageName = builtins.substring 0 atIndex name;
+        
+        # For scoped packages like @types/node, extract scope and package name
+        isScoped = builtins.substring 0 1 fullPackageName == "@";
+        scopeAndPackage = if isScoped 
+          then builtins.match "@([^/]+)/(.+)" fullPackageName
+          else null;
+        
+        packageName = fullPackageName;
+        tarballName = if isScoped 
+          then builtins.elemAt scopeAndPackage 1  # Just the package part for tarball
+          else fullPackageName;
+        
+        integrity = info.resolution.integrity or "";
+        
+        # Get dependencies for this package from snapshots
+        packageSnapshots = snapshots.${name} or {};
+        packageDependencies = packageSnapshots.dependencies or {};
+        
+      in pkgs.stdenv.mkDerivation {
+        pname = packageName;
+        version = version;
+        
+        src = pkgs.fetchurl {
+          url = "https://registry.npmjs.org/${packageName}/-/${tarballName}-${version}.tgz";
+          hash = integrity;
+        };
+        
+        dontBuild = true;
+        
+        installPhase = ''
+          mkdir -p $out
+          tar -xzf $src --strip-components=1 -C $out
+          
+          # Create node_modules with dependencies if any exist
+          if [ ${toString (builtins.length (builtins.attrNames packageDependencies))} -gt 0 ]; then
+            mkdir -p $out/node_modules
+            ${builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depVersion: 
+              let 
+                depKey = "${depName}@${depVersion}";
+                depDerivation = builtins.getAttr depKey self;
+              in "ln -s ${depDerivation} $out/node_modules/${depName}"
+            ) packageDependencies))}
+          fi
+        '';
+      }
+  ) allPackages);
 
 in {
   # Debug info
   debug = {
-    inherit lockfileData packages;
+    inherit lockfileData packages workspacePackages;
     packageCount = builtins.length (builtins.attrNames packages);
+    workspaceCount = builtins.length (builtins.attrNames workspacePackages);
   };
   
   # The actual derivations

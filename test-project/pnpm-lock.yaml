@@ -17,6 +17,11 @@ importers:
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
+      utils:
+        specifier: workspace:*
+        version: link:packages/utils
+
+  packages/utils: {}
 
 packages:
 
