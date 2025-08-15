@@ -16,10 +16,22 @@ let
   # Generate all package derivations using recursive set
   packageDerivations = pkgs.lib.fix (self: builtins.mapAttrs (name: info:
     let
-      # Parse package@version format
-      atIndex = builtins.stringLength name - 1 - (builtins.stringLength (builtins.elemAt (builtins.match ".*@([^@]+)" name) 0));
-      packageName = builtins.substring 0 atIndex name;
-      version = builtins.elemAt (builtins.match ".*@([^@]+)" name) 0;
+      # Parse package@version format, handling scoped packages
+      versionMatch = builtins.match ".*@([^@]+)" name;
+      version = builtins.elemAt versionMatch 0;
+      atIndex = builtins.stringLength name - 1 - (builtins.stringLength version);
+      fullPackageName = builtins.substring 0 atIndex name;
+      
+      # For scoped packages like @types/node, extract scope and package name
+      isScoped = builtins.substring 0 1 fullPackageName == "@";
+      scopeAndPackage = if isScoped 
+        then builtins.match "@([^/]+)/(.+)" fullPackageName
+        else null;
+      
+      packageName = fullPackageName;
+      tarballName = if isScoped 
+        then builtins.elemAt scopeAndPackage 1  # Just the package part for tarball
+        else fullPackageName;
       
       integrity = info.resolution.integrity or "";
       
@@ -32,7 +44,7 @@ let
       version = version;
       
       src = pkgs.fetchurl {
-        url = "https://registry.npmjs.org/${packageName}/-/${packageName}-${version}.tgz";
+        url = "https://registry.npmjs.org/${packageName}/-/${tarballName}-${version}.tgz";
         hash = integrity;
       };
       

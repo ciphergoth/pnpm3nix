@@ -23,6 +23,10 @@ function runProjectTests() {
   assert(redText.includes('test'), 'chalk output should contain the input text');
   console.log('✓ Chalk functionality works correctly');
   
+  // Test: Can import scoped package from node_modules
+  const nodeTypes = require('@types/node');
+  console.log('✓ @types/node import successful from node_modules');
+  
   console.log('\n🎉 Project tests passed successfully!');
 }
 

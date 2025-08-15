@@ -12,12 +12,19 @@ let
   projectDevDeps = lockfileData.importers.".".devDependencies or {};
   allProjectDeps = projectDeps // projectDevDeps;
   
-  # Create symlink commands for all dependencies
+  # Create symlink commands for all dependencies, handling scoped packages
   symlinkCommands = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depInfo: 
     let 
       depKey = "${depName}@${depInfo.version}";
       depDerivation = builtins.getAttr depKey packageDerivations;
-    in "ln -s ${depDerivation} $out/node_modules/${depName}"
+      isScoped = builtins.substring 0 1 depName == "@";
+    in if isScoped 
+      then 
+        let scopeMatch = builtins.match "@([^/]+)/(.+)" depName;
+            scope = builtins.elemAt scopeMatch 0;
+            packageInScope = builtins.elemAt scopeMatch 1;
+        in "mkdir -p $out/node_modules/@${scope} && ln -s ${depDerivation} $out/node_modules/@${scope}/${packageInScope}"
+      else "ln -s ${depDerivation} $out/node_modules/${depName}"
   ) allProjectDeps));
   
   # Build the test project with proper node_modules structure
