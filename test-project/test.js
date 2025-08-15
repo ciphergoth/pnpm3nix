@@ -24,8 +24,13 @@ function runProjectTests() {
   console.log('✓ Chalk functionality works correctly');
   
   // Test: Can import scoped package from node_modules
-  const nodeTypes = require('@types/node');
-  console.log('✓ @types/node import successful from node_modules');
+  const is = require('@sindresorhus/is');
+  console.log('✓ @sindresorhus/is import successful from node_modules');
+  
+  // Test: Scoped package functionality works
+  assert(is.string('test'), 'is.string should work correctly');
+  assert(!is.string(123), 'is.string should return false for numbers');
+  console.log('✓ @sindresorhus/is functionality works correctly');
   
   console.log('\n🎉 Project tests passed successfully!');
 }
