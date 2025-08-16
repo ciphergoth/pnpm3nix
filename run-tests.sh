@@ -9,3 +9,9 @@ echo "🧪 Running utils component tests..."
 nix-shell --run "cd test-project/packages/utils/result && node index.js"
 
 echo "✅ Utils component test completed successfully!"
+
+echo "🔧 Building TypeScript webapp component..."
+nix-shell --run "cd test-project/apps/ts-webapp && nix-build test-webapp.nix"
+
+echo "🧪 Testing TypeScript compilation..."
+nix-shell --run "cd test-project/apps/ts-webapp/result && node dist/index.js"

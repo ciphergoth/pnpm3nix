@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 {
-  mkPnpmPackage = { workspace, components, name ? null, version ? "1.0.0" }:
+  mkPnpmPackage = { workspace, components, name ? null, version ? "1.0.0", buildScripts ? [] }:
     let
       # For now, handle single component (first in array)
       componentPath = builtins.head components;
@@ -30,8 +30,8 @@
       projectName = if name != null then name else (packageJson.name or "unknown");
       projectVersion = packageJson.version or version;
       
-      # Create symlink commands for all dependencies, handling scoped packages and workspaces
-      symlinkCommands = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depInfo: 
+      # Create symlink commands for dependencies
+      createSymlinkCommands = deps: targetDir: builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depInfo: 
         let 
           # For workspace dependencies, use just the name; for npm packages, use name@version
           isWorkspace = builtins.substring 0 5 depInfo.version == "link:";
@@ -43,9 +43,20 @@
             let scopeMatch = builtins.match "@([^/]+)/(.+)" depName;
                 scope = builtins.elemAt scopeMatch 0;
                 packageInScope = builtins.elemAt scopeMatch 1;
-            in "mkdir -p $out/node_modules/@${scope} && ln -s ${depDerivation} $out/node_modules/@${scope}/${packageInScope}"
-          else "ln -s ${depDerivation} $out/node_modules/${depName}"
-      ) allProjectDeps));
+            in "mkdir -p ${targetDir}/@${scope} && ln -s ${depDerivation} ${targetDir}/@${scope}/${packageInScope}"
+          else "ln -s ${depDerivation} ${targetDir}/${depName}"
+      ) deps));
+      
+      # Build-time: all dependencies (runtime + dev)
+      buildTimeSymlinks = createSymlinkCommands allProjectDeps "node_modules";
+      
+      # Runtime: only runtime dependencies  
+      runtimeSymlinks = createSymlinkCommands projectDeps "$out/node_modules";
+      
+      # Create build script commands
+      buildCommands = builtins.concatStringsSep "\n" (builtins.map (script: 
+        "npm run ${script}"
+      ) buildScripts);
       
     in pkgs.stdenv.mkDerivation {
       pname = projectName;
@@ -53,17 +64,57 @@
       
       inherit src;
       
-      dontBuild = true;
+      buildInputs = [ pkgs.nodejs ];
+      
+      
+      configurePhase = ''
+        runHook preConfigure
+        
+        echo "Setting up build-time node_modules with all dependencies..."
+        echo "All project deps: ${builtins.toJSON (builtins.attrNames allProjectDeps)}"
+        mkdir -p node_modules
+        ${buildTimeSymlinks}
+        echo "Created dependencies:"
+        ls -la node_modules/
+        
+        # Create .bin directory with symlinks to executable scripts
+        mkdir -p node_modules/.bin
+        for dep in node_modules/*; do
+          echo "Checking $dep..."
+          if [ -d "$dep/bin" ]; then
+            echo "Found bin directory in $dep"
+            ls -la "$dep/bin/"
+            for bin in "$dep"/bin/*; do
+              if [ -f "$bin" ]; then
+                echo "Creating symlink for $(basename "$bin")"
+                ln -sf "../$(basename "$dep")/bin/$(basename "$bin")" "node_modules/.bin/$(basename "$bin")"
+              fi
+            done
+          else
+            echo "No bin directory in $dep"
+          fi
+        done
+        echo "Final .bin contents:"
+        ls -la node_modules/.bin/
+        
+        export PATH="$PWD/node_modules/.bin:$PATH"
+        
+        runHook postConfigure
+      '';
+      
+      buildPhase = ''
+        ${buildCommands}
+      '';
       
       installPhase = ''
         mkdir -p $out
-        cp -r $src/* $out/
         
-        # Create node_modules with symlinks to all direct dependencies
+        # Copy source files and built artifacts (but not node_modules)
+        cp -r --no-preserve=ownership $(find . -maxdepth 1 -not -name node_modules -not -name . -not -name ..) $out/
+        
+        # Create runtime-only node_modules in output
         mkdir -p $out/node_modules
-        
-        # Link all dependencies
-        ${symlinkCommands}
+        ${runtimeSymlinks}
       '';
     };
 }

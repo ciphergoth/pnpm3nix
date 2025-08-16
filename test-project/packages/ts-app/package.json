@@ -1,0 +1,15 @@
+{
+  "name": "ts-app",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/lodash": "^4.14.0"
+  }
+}
