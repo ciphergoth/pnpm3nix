@@ -4,8 +4,8 @@
 
 To match the existing pnpm2nix usage pattern in eloise/apps/zerbongle/flake.nix:
 
-1. **Add workspace + components parameters** - Support monorepo pattern with `workspace = ../..` and `components = ["apps/zerbongle"]`
-2. **Add overlay support** - Export as `overlays.default` to extend pkgs
+1. ✅ **Add workspace + components parameters** - Support monorepo pattern with `workspace = ../..` and `components = ["apps/zerbongle"]`
+2. ✅ **Add overlay support** - Export as `overlays.default` to extend pkgs
 3. **Add buildScripts parameter** - Run npm build commands like `buildScripts = ["build"]`
 4. **Add installNodeModules flag** - Optional dependency installation control
 5. **Keep backward compatibility** - Support both single `src` and workspace patterns
