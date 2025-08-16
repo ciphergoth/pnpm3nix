@@ -7,4 +7,5 @@ in
 pkgsWithOverlay.mkPnpmPackage {
   workspace = ../..;
   components = ["packages/utils"];
+  script = "";
 }

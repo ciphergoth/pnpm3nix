@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 {
-  mkPnpmPackage = { workspace, components, name ? null, version ? "1.0.0", buildScripts ? [] }:
+  mkPnpmPackage = { workspace, components, name ? null, version ? "1.0.0", script ? "build" }:
     let
       # For now, handle single component (first in array)
       componentPath = builtins.head components;
@@ -53,10 +53,8 @@
       # Runtime: only runtime dependencies  
       runtimeSymlinks = createSymlinkCommands projectDeps "$out/node_modules";
       
-      # Create build script commands
-      buildCommands = builtins.concatStringsSep "\n" (builtins.map (script: 
-        "npm run ${script}"
-      ) buildScripts);
+      # Create build script command
+      buildCommand = if script != "" then "npm run ${script}" else "";
       
     in pkgs.stdenv.mkDerivation {
       pname = projectName;
@@ -91,7 +89,7 @@
       '';
       
       buildPhase = ''
-        ${buildCommands}
+        ${buildCommand}
         rm -rf node_modules
       '';
       

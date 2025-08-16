@@ -7,5 +7,5 @@ in
 pkgsWithOverlay.mkPnpmPackage {
   workspace = ../..;
   components = ["apps/ts-webapp"];
-  buildScripts = ["build"];
+  script = "build";
 }
