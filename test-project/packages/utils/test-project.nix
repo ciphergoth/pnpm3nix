@@ -1,9 +1,10 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  pnpm2nix = import ../../../pnpm2nix.nix { inherit pkgs; };
+  overlay = import ../../../overlay.nix;
+  pkgsWithOverlay = pkgs.extend overlay;
 in
-pnpm2nix.mkPnpmPackage {
+pkgsWithOverlay.mkPnpmPackage {
   workspace = ../..;
   components = ["packages/utils"];
 }
