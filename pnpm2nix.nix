@@ -1,23 +1,28 @@
 { pkgs ? import <nixpkgs> {} }:
 
 {
-  mkPnpmPackage = { src, name ? null, version ? "1.0.0" }:
+  mkPnpmPackage = { workspace, components, name ? null, version ? "1.0.0" }:
     let
-      # Auto-detect lockfile path
-      lockfilePath = src + "/pnpm-lock.yaml";
+      # For now, handle single component (first in array)
+      componentPath = builtins.head components;
+      src = workspace + "/${componentPath}";
+      
+      # Auto-detect lockfile path from workspace root
+      lockfilePath = workspace + "/pnpm-lock.yaml";
       
       # Import the dynamic derivation generator function
       pnpm2nixInternal = import ./dynamic-derivations.nix { inherit pkgs; };
       dynamicDerivations = pnpm2nixInternal lockfilePath;
       packageDerivations = dynamicDerivations.packageDerivations;
       
-      # Get the project's direct dependencies from the lockfile
+      # Get the specific component's dependencies from the lockfile
       lockfileData = dynamicDerivations.debug.lockfileData;
-      projectDeps = lockfileData.importers.".".dependencies or {};
-      projectDevDeps = lockfileData.importers.".".devDependencies or {};
+      componentImporter = lockfileData.importers.${componentPath} or lockfileData.importers.".";
+      projectDeps = componentImporter.dependencies or {};
+      projectDevDeps = componentImporter.devDependencies or {};
       allProjectDeps = projectDeps // projectDevDeps;
       
-      # Auto-detect project name from package.json if not provided
+      # Auto-detect project name from component's package.json if not provided
       packageJsonPath = src + "/package.json";
       packageJson = if builtins.pathExists packageJsonPath 
         then builtins.fromJSON (builtins.readFile packageJsonPath)
