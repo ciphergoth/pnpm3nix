@@ -15,3 +15,6 @@ nix-shell --run "cd test-project/apps/ts-webapp && nix-build test-webapp.nix"
 
 echo "🧪 Testing TypeScript compilation..."
 nix-shell --run "cd test-project/apps/ts-webapp/result && node dist/index.js"
+
+echo "🧪 Testing dev dependencies excluded from final result..."
+nix-shell --run "cd test-project/apps/ts-webapp/result && test ! -d node_modules/typescript && test -d node_modules/lodash && echo '✅ Dev deps excluded, runtime deps included'"
