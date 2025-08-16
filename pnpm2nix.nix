@@ -104,15 +104,12 @@
       
       buildPhase = ''
         ${buildCommands}
+        rm -rf node_modules
       '';
       
       installPhase = ''
         mkdir -p $out
-        
-        # Copy source files and built artifacts (but not node_modules)
-        cp -r --no-preserve=ownership $(find . -maxdepth 1 -not -name node_modules -not -name . -not -name ..) $out/
-        
-        # Create runtime-only node_modules in output
+        cp -r --no-preserve=ownership . $out/
         mkdir -p $out/node_modules
         ${runtimeSymlinks}
       '';
