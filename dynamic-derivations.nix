@@ -40,12 +40,37 @@ let
   ) importers)));
   
 
-  # Combine npm packages and workspace packages
-  allPackages = packages // (builtins.mapAttrs (name: wsInfo: {
-    # Workspace packages don't have resolution info, we'll handle them specially
-    isWorkspace = true;
-    path = wsInfo.path;
-  }) workspacePackages);
+  # Create entries for peer dependency contexts from snapshots
+  peerContextPackages = builtins.mapAttrs (snapshotKey: snapshotData: 
+    let
+      # Check if this snapshot key has peer dependency context (contains parentheses)
+      hasPeerContext = builtins.match ".*\\(.*\\)" snapshotKey != null;
+    in if hasPeerContext then
+      # For peer context packages, we need to find the base package info
+      let
+        # Extract base package name (everything before the first parenthesis)
+        baseMatch = builtins.match "([^(]+)\\(.*\\)" snapshotKey;
+        basePackageKey = builtins.elemAt baseMatch 0;
+        basePackageInfo = builtins.getAttr basePackageKey packages;
+      in basePackageInfo // { 
+        isPeerContext = true; 
+        snapshotKey = snapshotKey;
+      }
+    else null
+  ) (builtins.removeAttrs snapshots (builtins.attrNames packages)); # Only consider snapshots not already in packages
+  
+  # Remove null entries from peerContextPackages
+  validPeerContextPackages = builtins.removeAttrs peerContextPackages 
+    (builtins.filter (key: (builtins.getAttr key peerContextPackages) == null) (builtins.attrNames peerContextPackages));
+
+  # Combine npm packages, workspace packages, and peer context packages
+  allPackages = packages // 
+    (builtins.mapAttrs (name: wsInfo: {
+      # Workspace packages don't have resolution info, we'll handle them specially
+      isWorkspace = true;
+      path = wsInfo.path;
+    }) workspacePackages) //
+    validPeerContextPackages;
 
   # Generate all package derivations using recursive set
   packageDerivations = pkgs.lib.fix (self: builtins.mapAttrs (name: info:
@@ -64,6 +89,59 @@ let
         installPhase = ''
           mkdir -p $out
           cp -r $src/* $out/
+        '';
+      }
+    else if info.isPeerContext or false then
+      # Handle peer context packages - they're the same as base packages but with different dependency contexts
+      let
+        # Parse the base package name from the snapshot key
+        baseMatch = builtins.match "([^(]+)\\(.*\\)" name;
+        basePackageKey = builtins.elemAt baseMatch 0;
+        
+        # Parse package@version format for the base package
+        versionMatch = builtins.match ".*@([^@]+)" basePackageKey;
+        version = builtins.elemAt versionMatch 0;
+        atIndex = builtins.stringLength basePackageKey - 1 - (builtins.stringLength version);
+        fullPackageName = builtins.substring 0 atIndex basePackageKey;
+        
+        # For scoped packages
+        isScoped = builtins.substring 0 1 fullPackageName == "@";
+        tarballName = if isScoped 
+          then let scopeMatch = builtins.match "@([^/]+)/(.+)" fullPackageName;
+               in builtins.elemAt scopeMatch 1
+          else fullPackageName;
+        
+        integrity = info.resolution.integrity or "";
+        
+        # Get dependencies for this peer context from snapshots
+        packageSnapshots = snapshots.${name} or {};
+        packageDependencies = packageSnapshots.dependencies or {};
+        
+      in pkgs.stdenv.mkDerivation {
+        pname = fullPackageName;
+        version = version;
+        
+        src = pkgs.fetchurl {
+          url = "https://registry.npmjs.org/${fullPackageName}/-/${tarballName}-${version}.tgz";
+          hash = integrity;
+        };
+        
+        dontBuild = true;
+        
+        installPhase = ''
+          mkdir -p $out
+          tar -xzf $src --strip-components=1 -C $out
+          
+          # Create node_modules with dependencies if any exist
+          if [ ${toString (builtins.length (builtins.attrNames packageDependencies))} -gt 0 ]; then
+            mkdir -p $out/node_modules
+            ${builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depVersion: 
+              let 
+                depKey = "${depName}@${depVersion}";
+                depDerivation = builtins.getAttr depKey self;
+              in "ln -s ${depDerivation} $out/node_modules/${depName}"
+            ) packageDependencies))}
+          fi
         '';
       }
     else

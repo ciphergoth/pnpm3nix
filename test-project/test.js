@@ -41,6 +41,18 @@ function runProjectTests() {
   assert.strictEqual(greeting, 'Hello, World!', 'utils.greet should work correctly');
   console.log('✓ Workspace utils functionality works correctly');
   
+  // Test: Can import react (peer dependency provider)
+  const React = require('react');
+  console.log('✓ React import successful from node_modules');
+  
+  // Test: Can import react-dom (has peer dependency on react)
+  const ReactDOM = require('react-dom');
+  console.log('✓ ReactDOM import successful from node_modules');
+  
+  // Test: ReactDOM can access its peer dependency (react)
+  assert(typeof ReactDOM.render === 'function', 'ReactDOM.render should be available');
+  console.log('✓ ReactDOM peer dependency functionality works correctly');
+  
   console.log('\n🎉 Project tests passed successfully!');
 }
 
