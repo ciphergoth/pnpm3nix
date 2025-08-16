@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      utils:
+        specifier: workspace:*
+        version: link:packages/utils
+
+  packages/utils:
+    dependencies:
       '@sindresorhus/is':
         specifier: ^4.6.0
         version: 4.6.0
@@ -23,11 +29,6 @@ importers:
       react-dom:
         specifier: ^18.0.0
         version: 18.3.1(react@18.3.1)
-      utils:
-        specifier: workspace:*
-        version: link:packages/utils
-
-  packages/utils: {}
 
 packages:
 

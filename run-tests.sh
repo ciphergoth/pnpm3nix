@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-echo "🔧 Building test-project with lockfile-generated dependencies..."
-nix-build test-project.nix
+echo "🔧 Building utils workspace component with all dependencies..."
+nix-shell --run "cd test-project/packages/utils && nix-build test-project.nix"
 
-echo "🧪 Running project tests..."
-nix-shell --run "cd result && node test.js"
+echo "🧪 Running utils component tests..."
+nix-shell --run "cd test-project/packages/utils/result && node test.js"
 
-echo "✅ Test completed successfully!"
+echo "✅ Utils component test completed successfully!"

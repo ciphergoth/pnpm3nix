@@ -1,5 +1,12 @@
 {
   "name": "utils",
   "version": "1.0.0",
-  "main": "index.js"
+  "main": "index.js",
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "chalk": "^4.1.2",
+    "@sindresorhus/is": "^4.6.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  }
 }
