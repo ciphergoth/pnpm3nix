@@ -70,32 +70,20 @@
       configurePhase = ''
         runHook preConfigure
         
-        echo "Setting up build-time node_modules with all dependencies..."
-        echo "All project deps: ${builtins.toJSON (builtins.attrNames allProjectDeps)}"
         mkdir -p node_modules
         ${buildTimeSymlinks}
-        echo "Created dependencies:"
-        ls -la node_modules/
         
         # Create .bin directory with symlinks to executable scripts
         mkdir -p node_modules/.bin
         for dep in node_modules/*; do
-          echo "Checking $dep..."
           if [ -d "$dep/bin" ]; then
-            echo "Found bin directory in $dep"
-            ls -la "$dep/bin/"
             for bin in "$dep"/bin/*; do
               if [ -f "$bin" ]; then
-                echo "Creating symlink for $(basename "$bin")"
                 ln -sf "../$(basename "$dep")/bin/$(basename "$bin")" "node_modules/.bin/$(basename "$bin")"
               fi
             done
-          else
-            echo "No bin directory in $dep"
           fi
         done
-        echo "Final .bin contents:"
-        ls -la node_modules/.bin/
         
         export PATH="$PWD/node_modules/.bin:$PATH"
         
