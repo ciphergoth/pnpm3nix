@@ -250,9 +250,15 @@ let
               else "ln -sf ${source} ${target}/${depName}";
               
           in if builtins.elem depKey sccPackages then
-            # Internal bundle dependency - relative symlink (go up two levels from node_modules)
-            let safePkgDepName = makeSafePkgName depKey;
-            in createSymlink "../../${safePkgDepName}" "$out/${safePkgName}/node_modules"
+            # Internal bundle dependency - relative symlink 
+            let 
+              safePkgDepName = makeSafePkgName depKey;
+              # Count slashes in depName to determine path depth
+              slashCount = builtins.length (builtins.filter (c: c == "/") (pkgs.lib.stringToCharacters depName));
+              # Base depth is 2 (package/node_modules), plus one for each slash in depName
+              upLevels = 2 + slashCount;
+              relativePath = builtins.concatStringsSep "" (builtins.genList (_: "../") upLevels);
+            in createSymlink "${relativePath}${safePkgDepName}" "$out/${safePkgName}/node_modules"
           else if builtins.hasAttr depKey packageToBundle then
             # External dependency in another bundle
             let 
