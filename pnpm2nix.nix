@@ -9,14 +9,14 @@
       # Auto-detect lockfile path from workspace root
       lockfilePath = workspace + "/pnpm-lock.yaml";
       
-      # Import the SCC-aware derivation generator function
-      sccAwareInternal = import ./scc-aware-derivations.nix { inherit pkgs tarjanCli; };
-      sccDerivations = sccAwareInternal lockfilePath;
-      bundleDerivations = sccDerivations.packageDerivations;
-      packageToBundle = sccDerivations.debug.packageToBundle;
+      # Import the derivation generator function
+      derivationsInternal = import ./derivations.nix { inherit pkgs tarjanCli; };
+      derivations = derivationsInternal lockfilePath;
+      bundleDerivations = derivations.packageDerivations;
+      packageToBundle = derivations.debug.packageToBundle;
       
       # Get the specific component's dependencies from the lockfile
-      lockfileData = sccDerivations.debug.lockfileData;
+      lockfileData = derivations.debug.lockfileData;
       componentImporter = lockfileData.importers.${componentPath} or lockfileData.importers.".";
       projectDeps = componentImporter.dependencies or {};
       projectDevDeps = componentImporter.devDependencies or {};
@@ -42,12 +42,12 @@
             let 
               bundleName = builtins.getAttr depKey packageToBundle;
               bundleDerivation = builtins.getAttr bundleName bundleDerivations;
-              safePkgName = sccDerivations.makeSafePkgName depKey;
+              safePkgName = derivations.makeSafePkgName depKey;
             in "${bundleDerivation}/${safePkgName}"
           else
             throw "Dependency ${depKey} not found in bundle derivations";
           
-        in sccDerivations.makeSymlinkCommand depName resolvedDep targetDir
+        in derivations.makeSymlinkCommand depName resolvedDep targetDir
       ) deps));
       
       # Build-time: all dependencies (runtime + dev)
