@@ -6,6 +6,6 @@ let
 in
 pkgsWithOverlay.mkPnpmPackage {
   workspace = ../..;
-  components = ["packages/utils"];
+  component = "packages/utils";
   script = "";
 }

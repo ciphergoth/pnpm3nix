@@ -139,6 +139,16 @@ let
        then builtins.substring 0 (len - 1) rawSafeName
        else rawSafeName;
 
+  # Helper function for creating symlinks (scoped and regular)
+  makeSymlinkCommand = depName: source: target:
+    let isScoped = builtins.substring 0 1 depName == "@";
+    in if isScoped then
+      let scopeMatch = builtins.match "@([^/]+)/(.+)" depName;
+          scope = builtins.elemAt scopeMatch 0;
+          packageInScope = builtins.elemAt scopeMatch 1;
+      in "mkdir -p ${target}/@${scope}; ln -sf ${source} ${target}/@${scope}/${packageInScope}"
+    else "ln -sf ${source} ${target}/${depName}";
+
   # Map each package to its bundle name
   packageToBundle = builtins.listToAttrs (builtins.concatLists (
     builtins.attrValues (builtins.mapAttrs (bundleName: bundleInfo:
@@ -238,16 +248,7 @@ let
         in builtins.attrValues (builtins.mapAttrs (depName: depVersion:
           let 
             depKey = "${depName}@${depVersion}";
-            isScoped = builtins.substring 0 1 depName == "@";
             
-            # Helper to create scoped or regular symlink
-            createSymlink = source: target:
-              if isScoped then
-                let scopeMatch = builtins.match "@([^/]+)/(.+)" depName;
-                    scope = builtins.elemAt scopeMatch 0;
-                    packageInScope = builtins.elemAt scopeMatch 1;
-                in "mkdir -p ${target}/@${scope}; ln -sf ${source} ${target}/@${scope}/${packageInScope}"
-              else "ln -sf ${source} ${target}/${depName}";
               
           in if builtins.elem depKey sccPackages then
             # Internal bundle dependency - relative symlink 
@@ -258,14 +259,14 @@ let
               # Base depth is 2 (package/node_modules), plus one for each slash in depName
               upLevels = 2 + slashCount;
               relativePath = builtins.concatStringsSep "" (builtins.genList (_: "../") upLevels);
-            in createSymlink "${relativePath}${safePkgDepName}" "$out/${safePkgName}/node_modules"
+            in makeSymlinkCommand depName "${relativePath}${safePkgDepName}" "$out/${safePkgName}/node_modules"
           else if builtins.hasAttr depKey packageToBundle then
             # External dependency in another bundle
             let 
               depBundleName = builtins.getAttr depKey packageToBundle;
               depBundleDrv = builtins.getAttr depBundleName allDerivations;
               safeDepName = makeSafePkgName depKey;
-            in createSymlink "${depBundleDrv}/${safeDepName}" "$out/${safePkgName}/node_modules"
+            in makeSymlinkCommand depName "${depBundleDrv}/${safeDepName}" "$out/${safePkgName}/node_modules"
           else
             # Dependency not found - this shouldn't happen but provide fallback
             "echo 'Warning: Dependency ${depKey} not found for ${pkg}'"
@@ -317,5 +318,5 @@ in {
   inherit packageDerivations;
   
   # Helper functions
-  inherit makeSafePkgName;
+  inherit makeSafePkgName makeSymlinkCommand;
 }

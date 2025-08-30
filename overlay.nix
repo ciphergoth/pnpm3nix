@@ -1,5 +1,5 @@
 final: prev: {
-  inherit ((import ./pnpm2nix-scc.nix { 
+  inherit ((import ./pnpm2nix.nix { 
     pkgs = final;
   })) mkPnpmPackage;
 }

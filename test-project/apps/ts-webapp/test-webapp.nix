@@ -6,6 +6,6 @@ let
 in
 pkgsWithOverlay.mkPnpmPackage {
   workspace = ../..;
-  components = ["apps/ts-webapp"];
+  component = "apps/ts-webapp";
   script = "build";
 }
