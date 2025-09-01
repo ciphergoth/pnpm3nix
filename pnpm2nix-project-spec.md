@@ -1,6 +1,6 @@
-# PNPM to Nix: Per-Package Derivation Design - Complete Discussion Archive
+# pnpm3nix: SCC-Based Dependency Resolution for Nix
 
-This document captures a comprehensive discussion about creating a new approach to building JavaScript applications with PNPM workspaces in Nix, using per-package derivations instead of monolithic builds.
+This document describes the motivation, architecture, and implementation of pnpm3nix - a tool that builds JavaScript projects with PNPM lockfiles using Strongly Connected Component (SCC) analysis to handle circular dependencies in Nix derivations.
 
 ## Background and Motivation
 
@@ -19,15 +19,15 @@ Existing pnpm2nix implementations (notably https://github.com/FliegendeWurst/pnp
 
 While there are pnpm hooks in nixpkgs that can work with `buildNpmPackage` to some degree, discussion suggests they don't fully handle complex workspace scenarios.
 
-## Proposed Solution: Per-Package Derivations
+## Implemented Solution: SCC-Based Derivations
 
 ### Core Concept
-Create individual Nix derivations for each resolved package context, treating the pnpm lockfile as a specification for building a dependency graph rather than trying to recreate pnpm's resolution logic.
+Use Tarjan's algorithm to detect Strongly Connected Components (SCCs) in the dependency graph and create shared derivations for cyclic dependencies. This solves the fundamental problem where circular dependencies (like `browserslist` ↔ `update-browserslist-db`) would create unresolvable circular references in Nix.
 
-Each resolved package context becomes its own derivation:
-- `react@19.1.0` → one derivation
-- `some-ui-lib@1.0.0(react@19.1.0)(typescript@5.3.2)` → different derivation  
-- `some-ui-lib@1.0.0(react@18.0.0)(typescript@5.3.2)` → yet another derivation
+### SCC Strategy
+- **Singleton packages**: Get individual derivations (`lodash@4.17.21`)
+- **Cyclic packages**: Share a single derivation containing all packages in the cycle
+- **Semantic naming**: Derivation names reflect content without exposing internal SCC indices
 
 ### Key Insight: Peer Dependencies Create Separate Contexts
 PNPM's notation like `package@1.0.0(react@19.1.0)(typescript@5.3.2)` represents the same source package in different peer dependency contexts. These genuinely need separate Nix derivations because:
@@ -37,11 +37,26 @@ PNPM's notation like `package@1.0.0(react@19.1.0)(typescript@5.3.2)` represents 
 
 ### Architecture Details
 
-Each derivation contains:
-1. **Package source files**: Extracted from the npm tarball
-2. **node_modules structure**: Symlinks to dependency derivations
-3. **Scoped package handling**: Real directories for scopes (`@types/`, `@babel/`) with symlinked packages inside
-4. **Dependency inputs**: Other derivations providing both regular and peer dependencies
+Each derivation contains either a single package or multiple packages in a dependency cycle:
+
+**For singleton packages** (`lodash@4.17.21`):
+```
+/nix/store/abc123-lodash-4.17.21/
+└── lodash@4.17.21/
+    ├── package.json
+    └── lib/
+```
+
+**For cyclic packages** (`browserslist` ↔ `update-browserslist-db`):
+```
+/nix/store/def456-browserslist-update-browserslist-db-cycle/
+├── browserslist@4.25.0/
+│   └── node_modules/
+│       └── update-browserslist-db@ -> ../update-browserslist-db@1.1.3/
+└── update-browserslist-db@1.1.3/
+    └── node_modules/
+        └── browserslist@ -> ../browserslist@4.25.0/
+```
 
 #### Symlink Structure
 For a package with dependencies, the derivation creates:
@@ -59,14 +74,15 @@ For a package with dependencies, the derivation creates:
 #### Workspace Handling
 Workspace dependencies like `link:../package` in the lockfile become references to other workspace derivations. Since pnpm lockfiles represent acyclic dependency graphs by definition, Nix can build workspace packages in topological order.
 
-## Implementation Strategy
+## Current Implementation
 
-### Phase 1: Lockfile Parsing
-- Use `yaml2json` to parse `pnpm-lock.yaml`
-- Treat complex package identifiers like `package@1.0.0(react@19.1.0)` as opaque strings - no need to understand peer dependency syntax, just use as unique identifiers
-- Extract dependency relationships for each package
+### SCC Detection Pipeline
+1. **Lockfile parsing**: `yaml2json` converts PNPM lockfile to JSON
+2. **Dependency extraction**: `jq` transforms snapshots into dependency graph format
+3. **Cycle detection**: `tarjan-cli` finds SCCs using Tarjan's algorithm
+4. **Derivation generation**: Create shared derivations for each SCC
 
-### Phase 2: Derivation Generation
+### Package Resolution
 For packages with no dependencies:
 ```nix
 pkgs.stdenv.mkDerivation {
@@ -85,24 +101,11 @@ pkgs.stdenv.mkDerivation {
 
 For packages with dependencies, add symlink creation in `installPhase`.
 
-### Phase 3: Dependency Wiring
-- Map lockfile dependencies to Nix derivation inputs
-- Handle both regular and peer dependencies as symlinks
-- Create proper directory structure for scoped packages
-
-### Phase 4: Native Package Support
-For packages requiring compilation:
-```nix
-buildInputs = [ 
-  pkgs.nodejs 
-  pkgs.python3  # node-gyp needs Python
-  pkgs.nodePackages.node-gyp
-  # Platform-specific build tools
-];
-buildPhase = ''
-  node-gyp rebuild
-'';
-```
+### Dependency Resolution
+- **Internal cycle references**: Use relative symlinks (`../package`) within shared derivations
+- **External references**: Use absolute paths to other derivations
+- **Scoped packages**: Create proper `@scope/package` directory structures
+- **Workspace packages**: Handle `link:` dependencies between workspace components
 
 ## Why This Approach Should Work
 

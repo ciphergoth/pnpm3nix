@@ -1,28 +1,20 @@
-# pnpm3nix Status
+# pnpm3nix Development Status
 
-## Core Features (Completed ✅)
+pnpm3nix successfully implements SCC-based dependency resolution and has been validated with real-world projects. The core architecture is complete and functional.
 
-- ✅ **SCC-based derivations** - Uses Tarjan's algorithm for cycle detection
-- ✅ **Lockfile parsing** - Full PNPM lockfile support with yaml2json
-- ✅ **Cycle resolution** - Handles circular dependencies (pg ↔ pg-pool, @babel/* cycles)
-- ✅ **Workspace support** - Monorepo support with component-based building
-- ✅ **Scoped packages** - Proper @scope/package handling
-- ✅ **Peer dependency contexts** - Isolated peer dependency resolution
-- ✅ **Direct package mapping** - Eliminated bundle naming collisions
-- ✅ **Semantic derivation names** - Clean names without internal implementation details
-- ✅ **Real-world validation** - Successfully builds eloise application
+## Future Enhancements
 
-## Edge Cases & Polish
-
+### Advanced Package Support
 - **Native package support** - Packages requiring compilation (node-gyp, Python)
-- **Optional dependencies** - Handle optionalDependencies in lockfile
+- **Optional dependencies** - Handle optionalDependencies in lockfile  
 - **Platform-specific packages** - Handle os/cpu constraints
+
+### Tooling & UX
 - **CLI tool** - Standalone executable for easy usage
-- **Error handling** - Graceful failures for missing packages/bad hashes
-- **Performance** - Optimize for large lockfiles
+- **Better error handling** - Graceful failures for missing packages/bad hashes
+- **Performance optimization** - Optimize for very large lockfiles
 
-## Testing
-
-- **Real-world projects** - Test with complex monorepos
-- **Integration tests** - Automated testing beyond current test-project
-- **Edge case coverage** - Test optional deps, platform packages, etc.
+### Extended Testing
+- **Additional real-world projects** - Expand test coverage beyond current validation
+- **Edge case scenarios** - Test optional deps, platform packages, complex peer contexts
+- **Performance benchmarks** - Measure against other JavaScript build tools
