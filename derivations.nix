@@ -130,9 +130,11 @@ let
   # Generate dependency graph JSON and run tarjan-cli
   sccs = builtins.fromJSON (builtins.readFile (pkgs.runCommand "tarjan-sccs" {
     nativeBuildInputs = [ tarjanCli ];
+    passAsFile = [ "dependencyGraph" ];
+    dependencyGraph = builtins.toJSON dependencyGraph;
   } ''
-    # Pass Nix-generated dependency graph to tarjan-cli
-    echo '${builtins.toJSON dependencyGraph}' | tarjan-cli > $out
+    # Pass Nix-generated dependency graph to tarjan-cli via file
+    tarjan-cli < $dependencyGraphPath > $out
   ''));
   
   # Create derivation info for all SCCs indexed by SCC number (no naming collisions)
