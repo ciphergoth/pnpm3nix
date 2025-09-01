@@ -9,9 +9,26 @@ let
     src = lockfilePath;
   } ''yaml2json < $src > $out''));
   
+  # Get platform info from Node.js
+  platformInfo = builtins.fromJSON (builtins.readFile (pkgs.runCommand "platform-info" {
+    nativeBuildInputs = [ pkgs.nodejs ];
+  } ''
+    node -p "JSON.stringify({platform: process.platform, arch: process.arch})" > $out
+  ''));
+  
   packages = lockfileData.packages;
   snapshots = lockfileData.snapshots or {};
   importers = lockfileData.importers;
+  
+  # Helper to check if optional dependency should be included for current platform
+  shouldIncludeOptional = packageKey: packageInfo:
+    let
+      osConstraint = packageInfo.os or [];
+      cpuConstraint = packageInfo.cpu or [];
+      currentPlatform = platformInfo.platform;
+      currentArch = platformInfo.arch;
+    in (osConstraint == [] || builtins.elem currentPlatform osConstraint) &&
+       (cpuConstraint == [] || builtins.elem currentArch cpuConstraint);
   
   # Get the directory containing the lockfile for resolving workspace paths
   lockfileDir = builtins.dirOf lockfilePath;
@@ -63,29 +80,59 @@ let
   validPeerContextPackages = builtins.removeAttrs peerContextPackages 
     (builtins.filter (key: (builtins.getAttr key peerContextPackages) == null) (builtins.attrNames peerContextPackages));
 
-  # Combine npm packages, workspace packages, and peer context packages
+  # Include platform-appropriate optional dependencies
+  platformOptionalPackages = builtins.listToAttrs (builtins.filter (entry: entry != null) (builtins.attrValues (builtins.mapAttrs (packageKey: packageInfo:
+    if shouldIncludeOptional packageKey packageInfo then
+      { name = packageKey; value = packageInfo; }
+    else null
+  ) packages)));
+
+  # Combine npm packages, workspace packages, peer context packages, and platform optional packages
   allPackages = packages // 
     (builtins.mapAttrs (name: wsInfo: {
       # Workspace packages don't have resolution info, we'll handle them specially
       isWorkspace = true;
       path = wsInfo.path;
     }) workspacePackages) //
-    validPeerContextPackages;
+    validPeerContextPackages //
+    platformOptionalPackages;
 
   # === SCC DETECTION PHASE ===
   
-  # Run streamlined pipeline: yaml2json | jq | tarjan-cli
+  # Process dependency graph in pure Nix with platform filtering
+  dependencyGraph = builtins.listToAttrs (builtins.attrValues (builtins.mapAttrs (snapshotKey: snapshotData:
+    let
+      regularDeps = snapshotData.dependencies or {};
+      optionalDeps = snapshotData.optionalDependencies or {};
+      
+      # Filter optional dependencies by platform constraints
+      platformOptionalDeps = builtins.listToAttrs (builtins.filter (entry: entry != null) (builtins.attrValues (builtins.mapAttrs (depName: depVersion:
+        let
+          depKey = "${depName}@${depVersion}";
+          depInfo = packages.${depKey} or {};
+        in if shouldIncludeOptional depKey depInfo then
+          { name = depName; value = depVersion; }
+        else null
+      ) optionalDeps)));
+      
+      # Combine regular and platform-appropriate optional dependencies
+      allDeps = regularDeps // platformOptionalDeps;
+      
+      # Convert to name@version format for tarjan-cli
+      depList = builtins.attrValues (builtins.mapAttrs (depName: depVersion: "${depName}@${depVersion}") allDeps);
+      
+    in {
+      name = snapshotKey;
+      value = depList;
+    }
+  ) snapshots));
+  
+  # Generate dependency graph JSON and run tarjan-cli
   sccs = builtins.fromJSON (builtins.readFile (pkgs.runCommand "tarjan-sccs" {
-    nativeBuildInputs = [ pkgs.yaml2json pkgs.jq tarjanCli ];
+    nativeBuildInputs = [ tarjanCli ];
   } ''
-    # Streamlined pipeline: lockfile -> dependency graph -> SCCs
-    yaml2json < ${lockfilePath} | jq '
-      # Extract dependency graph from snapshots with proper name@version format
-      (.snapshots // {}) | to_entries | map({
-        key: .key,
-        value: (.value.dependencies // {}) | to_entries | map(.key + "@" + .value)
-      }) | from_entries
-    ' | tarjan-cli > $out
+    # Pass Nix-generated dependency graph to tarjan-cli
+    echo '${builtins.toJSON dependencyGraph}' | tarjan-cli > $out
   ''));
   
   # Create derivation info for all SCCs indexed by SCC number (no naming collisions)
@@ -116,6 +163,26 @@ let
           packageInScope = builtins.elemAt scopeMatch 1;
       in "mkdir -p ${target}/@${scope}; ln -sf ${source} ${target}/@${scope}/${packageInScope}"
     else "ln -sf ${source} ${target}/${depName}";
+
+  # Extract bin information from package.json
+  extractBinInfo = packagePath: packageName:
+    let 
+      packageJsonPath = packagePath + "/package.json";
+    in if builtins.pathExists packageJsonPath then
+      let
+        packageJson = builtins.fromJSON (builtins.readFile packageJsonPath);
+        binField = packageJson.bin or null;
+      in if binField == null then
+        []
+      else if builtins.isString binField then
+        # Single executable: { "bin": "./cli.js" }
+        [{ name = packageName; path = binField; }]
+      else if builtins.isAttrs binField then
+        # Multiple executables: { "bin": { "cmd1": "./cli1.js", "cmd2": "./cli2.js" } }
+        builtins.attrValues (builtins.mapAttrs (name: path: { inherit name path; }) binField)
+      else
+        []
+    else [];
 
   # === DERIVATION GENERATION ===
 
@@ -202,12 +269,25 @@ let
           packageKey = if (pkgInfo.isPeerContext or false) then pkgInfo.snapshotKey else pkg;
           packageSnapshots = snapshots.${packageKey} or {};
           packageDependencies = packageSnapshots.dependencies or {};
+          packageOptionalDeps = packageSnapshots.optionalDependencies or {};
+          
+          # Filter optional dependencies by platform constraints
+          platformOptionalDeps = builtins.listToAttrs (builtins.filter (entry: entry != null) (builtins.attrValues (builtins.mapAttrs (depName: depVersion:
+            let
+              depKey = "${depName}@${depVersion}";
+              depInfo = packages.${depKey} or {};
+            in if shouldIncludeOptional depKey depInfo then
+              { name = depName; value = depVersion; }
+            else null
+          ) packageOptionalDeps)));
+          
+          # Combine regular and platform-appropriate optional dependencies
+          allDependencies = packageDependencies // platformOptionalDeps;
           
         in builtins.attrValues (builtins.mapAttrs (depName: depVersion:
           let 
             depKey = "${depName}@${depVersion}";
             
-              
           in if builtins.elem depKey sccPackages then
             # Internal SCC dependency - relative symlink 
             let 
@@ -227,7 +307,7 @@ let
           else
             # Dependency not found - this shouldn't happen but provide fallback
             "echo 'Warning: Dependency ${depKey} not found for ${pkg}'"
-        ) packageDependencies)
+        ) allDependencies)
       ) sccPackageInfos));
       
     in pkgs.stdenv.mkDerivation {
@@ -304,5 +384,5 @@ in {
   inherit packageDerivations;
   
   # Helper functions
-  inherit makeSafePkgName makeSymlinkCommand;
+  inherit makeSafePkgName makeSymlinkCommand extractBinInfo;
 }

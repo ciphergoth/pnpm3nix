@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {}, tarjanCli ? (import ./tarjan-cli.nix { inherit pkgs; }) }:
 
 {
-  mkPnpmPackage = { workspace, component, name ? null, version ? "1.0.0", script ? "build" }:
+  mkPnpmPackage = { workspace, component, name ? null, version ? "1.0.0", script ? "build", buildInputs ? [] }:
     let
       src = workspace + "/${component}";
       
@@ -49,8 +49,32 @@
       # Build-time: all dependencies (runtime + dev)
       buildTimeSymlinks = createSymlinkCommands allProjectDeps "node_modules";
       
+      # Create .bin symlink commands for build-time executables
+      createBinSymlinks = deps: targetDir: builtins.concatStringsSep "\n" (builtins.concatLists (builtins.attrValues (builtins.mapAttrs (depName: depInfo:
+        let 
+          isWorkspace = builtins.substring 0 5 depInfo.version == "link:";
+          depKey = if isWorkspace then depName else "${depName}@${depInfo.version}";
+          
+          resolvedDep = if builtins.hasAttr depKey packageDerivations then
+            let 
+              packageDerivation = builtins.getAttr depKey packageDerivations;
+              safePkgName = derivations.makeSafePkgName depKey;
+            in "${packageDerivation}/${safePkgName}"
+          else "";
+          
+        in if resolvedDep != "" then
+          let binEntries = derivations.extractBinInfo resolvedDep depName;
+          in builtins.map (binEntry: 
+            "ln -sf \"../${depName}/${binEntry.path}\" \"${targetDir}/.bin/${binEntry.name}\""
+          ) binEntries
+        else []
+      ) deps)));
+      
+      buildTimeBinSymlinks = createBinSymlinks allProjectDeps "node_modules";
+      
       # Runtime: only runtime dependencies  
       runtimeSymlinks = createSymlinkCommands projectDeps "$out/node_modules";
+      runtimeBinSymlinks = createBinSymlinks projectDeps "$out/node_modules";
       
       # Create build script command
       buildCommand = if script != "" then "npm run ${script}" else "";
@@ -61,7 +85,7 @@
       
       inherit src;
       
-      buildInputs = [ pkgs.nodejs ];
+      buildInputs = [ pkgs.nodejs ] ++ buildInputs;
       
       configurePhase = ''
         runHook preConfigure
@@ -73,19 +97,7 @@
         
         # Create .bin directory with symlinks to executable scripts
         mkdir -p node_modules/.bin
-        for pkg_dir in node_modules/*; do
-          if [ -d "$pkg_dir" ] && [ -L "$pkg_dir" ]; then
-            # Follow the symlink to the actual package directory
-            actual_dir=$(readlink "$pkg_dir")
-            if [ -d "$actual_dir/bin" ]; then
-              for bin in "$actual_dir"/bin/*; do
-                if [ -f "$bin" ]; then
-                  ln -sf "../$(basename "$pkg_dir")/bin/$(basename "$bin")" "node_modules/.bin/$(basename "$bin")"
-                fi
-              done
-            fi
-          fi
-        done
+        ${buildTimeBinSymlinks}
         
         export PATH="$PWD/node_modules/.bin:$PATH"
         
@@ -102,6 +114,10 @@
         cp -r --no-preserve=ownership . $out/
         mkdir -p $out/node_modules
         ${runtimeSymlinks}
+        
+        # Create .bin directory for runtime
+        mkdir -p $out/node_modules/.bin
+        ${runtimeBinSymlinks}
       '';
     };
 }
