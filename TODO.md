@@ -1,24 +1,16 @@
-# pnpm2nix TODO
-
-## API Alignment with Existing pnpm2nix
-
-To match the existing pnpm2nix usage pattern in eloise/apps/zerbongle/flake.nix:
-
-1. ✅ **Add workspace + components parameters** - Support monorepo pattern with `workspace = ../..` and `components = ["apps/zerbongle"]`
-2. ✅ **Add overlay support** - Export as `overlays.default` to extend pkgs
-3. **Add buildScripts parameter** - Run npm build commands like `buildScripts = ["build"]`
-4. **Add installNodeModules flag** - Optional dependency installation control
-5. **Keep backward compatibility** - Support both single `src` and workspace patterns
+# pnpm3nix Status
 
 ## Core Features (Completed ✅)
 
-- ✅ Lockfile parsing with yaml2json
-- ✅ Per-package derivations with fetchurl
-- ✅ Transitive dependency resolution
-- ✅ Scoped packages (@scope/package)
-- ✅ Workspace support (link: references)
-- ✅ Peer dependency contexts
-- ✅ Basic mkPnpmPackage API
+- ✅ **SCC-based derivations** - Uses Tarjan's algorithm for cycle detection
+- ✅ **Lockfile parsing** - Full PNPM lockfile support with yaml2json
+- ✅ **Cycle resolution** - Handles circular dependencies (pg ↔ pg-pool, @babel/* cycles)
+- ✅ **Workspace support** - Monorepo support with component-based building
+- ✅ **Scoped packages** - Proper @scope/package handling
+- ✅ **Peer dependency contexts** - Isolated peer dependency resolution
+- ✅ **Direct package mapping** - Eliminated bundle naming collisions
+- ✅ **Semantic derivation names** - Clean names without internal implementation details
+- ✅ **Real-world validation** - Successfully builds eloise application
 
 ## Edge Cases & Polish
 

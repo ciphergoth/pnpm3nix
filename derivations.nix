@@ -209,7 +209,7 @@ let
             
               
           in if builtins.elem depKey sccPackages then
-            # Internal bundle dependency - relative symlink 
+            # Internal SCC dependency - relative symlink 
             let 
               safePkgDepName = makeSafePkgName depKey;
               # Count slashes in depName to determine path depth
@@ -281,25 +281,15 @@ let
 
   # Create package-to-derivation mapping where packages in same SCC share derivations
   packageDerivations = pkgs.lib.fix (self:
-    let
-      # Create derivations for each SCC
-      sccDerivations = builtins.map (sccInfo:
-        mkSccDerivation sccInfo self
-      ) sccData;
-      
-      # Map each package to its SCC's derivation
-      packageToDerivation = builtins.listToAttrs (builtins.concatLists (
-        builtins.genList (sccIndex:
-          let 
-            sccInfo = builtins.elemAt sccData sccIndex;
-            sccDerivation = builtins.elemAt sccDerivations sccIndex;
-          in builtins.map (pkg: {
-            name = pkg;
-            value = sccDerivation;
-          }) sccInfo.packages
-        ) (builtins.length sccData)
-      ));
-    in packageToDerivation
+    builtins.listToAttrs (builtins.concatLists (
+      builtins.map (sccInfo:
+        let sccDerivation = mkSccDerivation sccInfo self;
+        in builtins.map (pkg: {
+          name = pkg;
+          value = sccDerivation;
+        }) sccInfo.packages
+      ) sccData
+    ))
   );
 
 in {

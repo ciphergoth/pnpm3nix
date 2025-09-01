@@ -3,20 +3,18 @@
 {
   mkPnpmPackage = { workspace, component, name ? null, version ? "1.0.0", script ? "build" }:
     let
-      componentPath = component;
-      src = workspace + "/${componentPath}";
+      src = workspace + "/${component}";
       
       # Auto-detect lockfile path from workspace root
       lockfilePath = workspace + "/pnpm-lock.yaml";
       
       # Import the derivation generator function
-      derivationsInternal = import ./derivations.nix { inherit pkgs tarjanCli; };
-      derivations = derivationsInternal lockfilePath;
+      derivations = import ./derivations.nix { inherit pkgs tarjanCli; } lockfilePath;
       packageDerivations = derivations.packageDerivations;
       
       # Get the specific component's dependencies from the lockfile
       lockfileData = derivations.debug.lockfileData;
-      componentImporter = lockfileData.importers.${componentPath} or lockfileData.importers.".";
+      componentImporter = lockfileData.importers.${component} or lockfileData.importers.".";
       projectDeps = componentImporter.dependencies or {};
       projectDevDeps = componentImporter.devDependencies or {};
       allProjectDeps = projectDeps // projectDevDeps;
@@ -29,7 +27,7 @@
       projectName = if name != null then name else (packageJson.name or "unknown");
       projectVersion = packageJson.version or version;
       
-      # Create symlink commands for dependencies using SCC-aware resolution
+      # Create symlink commands for dependencies
       createSymlinkCommands = deps: targetDir: builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (depName: depInfo: 
         let 
           # For workspace dependencies, use just the name; for npm packages, use name@version
@@ -65,7 +63,6 @@
       
       buildInputs = [ pkgs.nodejs ];
       
-      
       configurePhase = ''
         runHook preConfigure
         
@@ -76,14 +73,14 @@
         
         # Create .bin directory with symlinks to executable scripts
         mkdir -p node_modules/.bin
-        for bundle_dir in node_modules/*; do
-          if [ -d "$bundle_dir" ] && [ -L "$bundle_dir" ]; then
-            # Follow the symlink to the actual bundle/package directory
-            actual_dir=$(readlink "$bundle_dir")
+        for pkg_dir in node_modules/*; do
+          if [ -d "$pkg_dir" ] && [ -L "$pkg_dir" ]; then
+            # Follow the symlink to the actual package directory
+            actual_dir=$(readlink "$pkg_dir")
             if [ -d "$actual_dir/bin" ]; then
               for bin in "$actual_dir"/bin/*; do
                 if [ -f "$bin" ]; then
-                  ln -sf "../$(basename "$bundle_dir")/bin/$(basename "$bin")" "node_modules/.bin/$(basename "$bin")"
+                  ln -sf "../$(basename "$pkg_dir")/bin/$(basename "$bin")" "node_modules/.bin/$(basename "$bin")"
                 fi
               done
             fi

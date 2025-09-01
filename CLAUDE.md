@@ -19,12 +19,12 @@ This is **pnpm3nix** - a Nix-based tool for building JavaScript projects with PN
 
 ### Key Design Principles
 
-1. **SCC-aware bundling**: Uses Tarjan's algorithm to detect dependency cycles and bundle them into single derivations
-2. **Consistent structure**: All packages (singleton and bundled) use the same `bundle-name/{package@version}/` directory layout
-3. **Semantic naming**: Bundle names reflect their contents (e.g., `browserslist-update-browserslist-db-cycle-bundle`)
+1. **SCC-based derivations**: Uses Tarjan's algorithm to detect dependency cycles and create shared derivations
+2. **Consistent structure**: All packages use the same `derivation/{package@version}/` directory layout
+3. **Semantic naming**: Derivation names reflect their contents (e.g., `browserslist-update-browserslist-db-cycle`)
 4. **Peer dependency isolation**: Packages with different peer dependency contexts become separate derivations
 5. **Workspace support**: Handles PNPM workspaces with `link:` references between packages
-6. **Symlink-based node_modules**: Creates proper node_modules structure using symlinks to bundle derivations
+6. **Symlink-based node_modules**: Creates proper node_modules structure using symlinks to package derivations
 
 ## Development Commands
 
@@ -109,20 +109,20 @@ The original `dynamic-derivations.nix` fails when PNPM lockfiles contain depende
 
 ### Solution Architecture
 1. **Cycle Detection**: Uses Tarjan's algorithm via external CLI tool to find SCCs in dependency graph
-2. **Bundle Strategy**: 
-   - **Singleton packages**: Get individual bundles (e.g., `lodash-bundle/{lodash@4.17.21}/`)
-   - **Cyclic packages**: Get bundled together (e.g., `browserslist-update-browserslist-db-cycle-bundle/{browserslist@4.25.0/, update-browserslist-db@1.1.3}/`)
-3. **Dependency Resolution**: Internal cycle references use relative symlinks (`../package`), external references use absolute bundle paths
+2. **SCC Strategy**: 
+   - **Singleton packages**: Get individual derivations (e.g., `lodash-4.17.21/{lodash@4.17.21}/`)
+   - **Cyclic packages**: Share a single derivation (e.g., `browserslist-update-browserslist-db-cycle/{browserslist@4.25.0/, update-browserslist-db@1.1.3}/`)
+3. **Dependency Resolution**: Internal cycle references use relative symlinks (`../package`), external references use absolute derivation paths
 
-### Bundle Structure
+### Derivation Structure
 ```
-/nix/store/abc123-lodash-bundle/
-└── lodash@4.17.21/          # Singleton bundle
+/nix/store/abc123-lodash-4.17.21/
+└── lodash@4.17.21/          # Singleton derivation
     ├── package.json
     └── lib/
 
-/nix/store/def456-browserslist-update-browserslist-db-cycle-bundle/
-├── browserslist@4.25.0/     # Cyclic bundle  
+/nix/store/def456-browserslist-update-browserslist-db-cycle/
+├── browserslist@4.25.0/     # Cyclic derivation  
 │   └── node_modules/
 │       └── update-browserslist-db@ -> ../update-browserslist-db@1.1.3-browserslist@4.25.0-
 └── update-browserslist-db@1.1.3-browserslist@4.25.0-/

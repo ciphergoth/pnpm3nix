@@ -1,5 +1,5 @@
 {
-  description = "pnpm2nix with per-package derivations";
+  description = "pnpm2nix with SCC-based cycle-aware derivations";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
