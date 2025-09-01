@@ -12,8 +12,7 @@
       # Import the derivation generator function
       derivationsInternal = import ./derivations.nix { inherit pkgs tarjanCli; };
       derivations = derivationsInternal lockfilePath;
-      bundleDerivations = derivations.packageDerivations;
-      packageToBundle = derivations.debug.packageToBundle;
+      packageDerivations = derivations.packageDerivations;
       
       # Get the specific component's dependencies from the lockfile
       lockfileData = derivations.debug.lockfileData;
@@ -37,15 +36,14 @@
           isWorkspace = builtins.substring 0 5 depInfo.version == "link:";
           depKey = if isWorkspace then depName else "${depName}@${depInfo.version}";
           
-          # Look up dependency in bundle structure
-          resolvedDep = if builtins.hasAttr depKey packageToBundle then
+          # Look up dependency directly in package derivations
+          resolvedDep = if builtins.hasAttr depKey packageDerivations then
             let 
-              bundleName = builtins.getAttr depKey packageToBundle;
-              bundleDerivation = builtins.getAttr bundleName bundleDerivations;
+              packageDerivation = builtins.getAttr depKey packageDerivations;
               safePkgName = derivations.makeSafePkgName depKey;
-            in "${bundleDerivation}/${safePkgName}"
+            in "${packageDerivation}/${safePkgName}"
           else
-            throw "Dependency ${depKey} not found in bundle derivations";
+            throw "Dependency ${depKey} not found in package derivations";
           
         in derivations.makeSymlinkCommand depName resolvedDep targetDir
       ) deps));

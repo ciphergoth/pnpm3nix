@@ -88,48 +88,16 @@ let
     ' | tarjan-cli > $out
   ''));
   
-  # Generate semantic bundle names
-  generateBundleName = sccPackages:
-    let 
-      packageCount = builtins.length sccPackages;
-      sortedPackages = builtins.sort (a: b: a < b) sccPackages;
-      
-      # Extract clean package name (remove version and peer context)
-      extractPackageName = pkg:
-        let match = builtins.match "([^@]+).*" pkg;
-        in if match != null then builtins.elemAt match 0 else pkg;
-        
-    in
-      if packageCount == 1 then
-        "${extractPackageName (builtins.head sortedPackages)}-bundle"
-      else if packageCount <= 3 then
-        let
-          cleanNames = builtins.map extractPackageName sortedPackages;
-          uniqueNames = builtins.sort (a: b: a < b) (pkgs.lib.unique cleanNames);
-        in "${builtins.concatStringsSep "-" uniqueNames}-cycle-bundle"
-      else
-        # For large cycles, use first package + hash
-        let 
-          firstPackage = builtins.head sortedPackages;
-          cleanName = extractPackageName firstPackage;
-          sccHash = builtins.hashString "md5" (builtins.toJSON sortedPackages);
-          shortHash = builtins.substring 0 8 sccHash;
-        in "${cleanName}-cycle-${shortHash}-bundle";
-  
-  # Create bundle info for all SCCs (both singletons and cycles)
-  sccBundles = builtins.listToAttrs (builtins.genList (sccIndex:
+  # Create derivation info for all SCCs indexed by SCC number (no naming collisions)
+  sccData = builtins.genList (sccIndex:
     let 
       sccPackages = builtins.elemAt sccs sccIndex;
-      bundleName = generateBundleName sccPackages;
     in {
-      name = bundleName;
-      value = {
-        index = sccIndex;
-        packages = sccPackages;
-        isCyclic = builtins.length sccPackages > 1;
-      };
+      index = sccIndex;
+      packages = sccPackages;
+      isCyclic = builtins.length sccPackages > 1;
     }
-  ) (builtins.length sccs));
+  ) (builtins.length sccs);
   
   # Helper function for consistent safe name generation
   makeSafePkgName = pkg:
@@ -149,26 +117,16 @@ let
       in "mkdir -p ${target}/@${scope}; ln -sf ${source} ${target}/@${scope}/${packageInScope}"
     else "ln -sf ${source} ${target}/${depName}";
 
-  # Map each package to its bundle name
-  packageToBundle = builtins.listToAttrs (builtins.concatLists (
-    builtins.attrValues (builtins.mapAttrs (bundleName: bundleInfo:
-      builtins.map (pkg: {
-        name = pkg;
-        value = bundleName;
-      }) bundleInfo.packages
-    ) sccBundles)
-  ));
-
   # === DERIVATION GENERATION ===
 
-  # Function to create a bundle derivation (handles both singletons and cycles)
-  mkBundleDerivation = bundleName: bundleInfo: allDerivations:
+  # Function to create an SCC derivation (handles both singletons and cycles)
+  mkSccDerivation = sccInfo: allDerivations:
     let
-      sccPackages = bundleInfo.packages;
-      isCyclic = bundleInfo.isCyclic;
+      sccPackages = sccInfo.packages;
+      isCyclic = sccInfo.isCyclic;
       
-      # Get package info for all packages in this bundle
-      bundlePackageInfos = builtins.map (pkg: {
+      # Get package info for all packages in this SCC
+      sccPackageInfos = builtins.map (pkg: {
         name = pkg;
         info = if builtins.hasAttr pkg allPackages then
           builtins.getAttr pkg allPackages
@@ -231,7 +189,7 @@ let
               hash = integrity;
             }} --strip-components=1 -C temp-${safePkgName}
           ''
-      ) bundlePackageInfos);
+      ) sccPackageInfos);
       
       # Helper to create symlinks (both internal and external)
       createSymlinks = builtins.concatStringsSep "\n" (builtins.concatLists (builtins.map (pkgEntry:
@@ -260,21 +218,43 @@ let
               upLevels = 2 + slashCount;
               relativePath = builtins.concatStringsSep "" (builtins.genList (_: "../") upLevels);
             in makeSymlinkCommand depName "${relativePath}${safePkgDepName}" "$out/${safePkgName}/node_modules"
-          else if builtins.hasAttr depKey packageToBundle then
-            # External dependency in another bundle
+          else if builtins.hasAttr depKey allDerivations then
+            # External dependency - get its derivation directly
             let 
-              depBundleName = builtins.getAttr depKey packageToBundle;
-              depBundleDrv = builtins.getAttr depBundleName allDerivations;
+              depDrv = builtins.getAttr depKey allDerivations;
               safeDepName = makeSafePkgName depKey;
-            in makeSymlinkCommand depName "${depBundleDrv}/${safeDepName}" "$out/${safePkgName}/node_modules"
+            in makeSymlinkCommand depName "${depDrv}/${safeDepName}" "$out/${safePkgName}/node_modules"
           else
             # Dependency not found - this shouldn't happen but provide fallback
             "echo 'Warning: Dependency ${depKey} not found for ${pkg}'"
         ) packageDependencies)
-      ) bundlePackageInfos));
+      ) sccPackageInfos));
       
     in pkgs.stdenv.mkDerivation {
-      name = bundleName;
+      name = if isCyclic then
+        let
+          # For cycles, create meaningful name from package names
+          sortedPackages = builtins.sort (a: b: a < b) sccPackages;
+          packageCount = builtins.length sortedPackages;
+          extractPackageName = pkg:
+            let match = builtins.match "([^@]+).*" pkg;
+            in if match != null then builtins.elemAt match 0 else pkg;
+        in
+          if packageCount <= 3 then
+            let
+              cleanNames = builtins.map extractPackageName sortedPackages;
+              uniqueNames = builtins.sort (a: b: a < b) (pkgs.lib.unique cleanNames);
+            in "${builtins.concatStringsSep "-" uniqueNames}-cycle"
+          else
+            let 
+              firstPackage = builtins.head sortedPackages;
+              cleanName = extractPackageName firstPackage;
+              sccHash = builtins.hashString "md5" (builtins.toJSON sortedPackages);
+              shortHash = builtins.substring 0 8 sccHash;
+            in "${cleanName}-cycle-${shortHash}"
+      else
+        # For single packages, use the package name directly
+        makeSafePkgName (builtins.head sccPackages);
       
       dontUnpack = true;
       dontBuild = true;
@@ -292,26 +272,42 @@ let
             cp -r temp-${safePkgName}/* $out/${safePkgName}/
             mkdir -p $out/${safePkgName}/node_modules
           ''
-        ) bundlePackageInfos)}
+        ) sccPackageInfos)}
         
         # Create dependency symlinks
         ${createSymlinks}
       '';
     };
 
-  # Generate all bundle derivations using recursive set
-  packageDerivations = pkgs.lib.fix (self: 
-    builtins.mapAttrs (bundleName: bundleInfo:
-      mkBundleDerivation bundleName bundleInfo self
-    ) sccBundles
+  # Create package-to-derivation mapping where packages in same SCC share derivations
+  packageDerivations = pkgs.lib.fix (self:
+    let
+      # Create derivations for each SCC
+      sccDerivations = builtins.map (sccInfo:
+        mkSccDerivation sccInfo self
+      ) sccData;
+      
+      # Map each package to its SCC's derivation
+      packageToDerivation = builtins.listToAttrs (builtins.concatLists (
+        builtins.genList (sccIndex:
+          let 
+            sccInfo = builtins.elemAt sccData sccIndex;
+            sccDerivation = builtins.elemAt sccDerivations sccIndex;
+          in builtins.map (pkg: {
+            name = pkg;
+            value = sccDerivation;
+          }) sccInfo.packages
+        ) (builtins.length sccData)
+      ));
+    in packageToDerivation
   );
 
 in {
   # Debug info
   debug = {
-    inherit lockfileData packages workspacePackages sccs sccBundles packageToBundle;
-    bundleCount = builtins.length (builtins.attrNames sccBundles);
-    cyclicBundles = builtins.filter (bundle: bundle.isCyclic) (builtins.attrValues sccBundles);
+    inherit lockfileData packages workspacePackages sccs sccData;
+    sccCount = builtins.length sccData;
+    cyclicSccs = builtins.filter (scc: scc.isCyclic) sccData;
   };
   
   # The actual derivations
