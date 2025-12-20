@@ -338,6 +338,8 @@ let
         # For single packages, use the package name directly
         makeSafePkgName (builtins.head sccPackages);
 
+      nativeBuildInputs = [ pkgs.nodejs ];
+
       dontUnpack = true;
       dontBuild = true;
 
@@ -353,6 +355,16 @@ let
             mkdir -p $out/${safePkgName}
             cp -r temp-${safePkgName}/* $out/${safePkgName}/
             mkdir -p $out/${safePkgName}/node_modules
+          ''
+        ) sccPackageInfos)}
+
+        # Fix shebangs in all packages
+        ${builtins.concatStringsSep "\n" (builtins.map (pkgEntry:
+          let
+            pkg = pkgEntry.name;
+            safePkgName = makeSafePkgName pkg;
+          in ''
+            patchShebangs $out/${safePkgName}
           ''
         ) sccPackageInfos)}
 
