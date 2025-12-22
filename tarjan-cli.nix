@@ -11,13 +11,13 @@ in
 pkgs.rustPlatform.buildRustPackage {
   pname = "tarjan-cli";
   version = "0.1.0-f27f8bf";
-  
+
   src = pinnedSrc;
-  
+
   cargoLock = {
     lockFile = pinnedSrc + "/Cargo.lock";
   };
-  
+
   meta = {
     description = "CLI tool for finding strongly connected components using Tarjan's algorithm";
   };

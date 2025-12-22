@@ -161,7 +161,7 @@ Both PNPM and Nix use content-addressable storage with similar philosophies. We'
 ### 4. Native Dependencies
 **Risk**: Packages with `.node` files having filesystem layout assumptions.
 
-**Details**: 
+**Details**:
 - `.node` files are compiled C++ extensions for Node.js
 - Native packages might use relative paths to find shared libraries
 - Build process might expect specific directory structures
@@ -189,7 +189,7 @@ You get 90% working, then hit a subtle Node.js behavior that doesn't work with y
 ### 2. Complexity Explosion (High probability)
 The "simple" lockfile parsing turns into handling dozens of edge cases:
 - Optional dependencies
-- Platform-specific packages  
+- Platform-specific packages
 - Different lockfile format versions
 - Build scripts with special requirements
 - Packages that modify themselves
@@ -222,7 +222,7 @@ Your approach works for running apps but breaks webpack/vite/rollup analysis of 
 - Single package with simple dependencies (no peer deps)
 - Basic workspace with two packages
 
-**Tier 2: Real-world Complexity**  
+**Tier 2: Real-world Complexity**
 - Popular open source projects of increasing complexity
 - Projects with peer dependencies
 - Multi-package workspaces with interdependencies
@@ -274,7 +274,7 @@ docker run --rm -v $(pwd):/workspace test-runner \
 
 ### vs. buildNpmPackage with pnpm hooks
 **Current limitations**: Discussion suggests workspace support is incomplete
-**Our advantages**: 
+**Our advantages**:
 - Designed specifically for pnpm's peer dependency model
 - Better Docker layering through fine-grained derivations
 - Handles complex workspace scenarios
@@ -311,7 +311,7 @@ docker run --rm -v $(pwd):/workspace test-runner \
 
 ### Incremental Expansion
 1. **Workspace support**: Handle `link:` references and build ordering
-2. **Peer dependency contexts**: Ensure different contexts create separate derivations  
+2. **Peer dependency contexts**: Ensure different contexts create separate derivations
 3. **Scoped packages**: Proper `@scope/package` directory structure
 4. **Edge case handling**: Optional deps, platform-specific packages
 5. **Native package support**: Compilation and build tooling

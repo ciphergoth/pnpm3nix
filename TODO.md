@@ -6,7 +6,7 @@ pnpm3nix successfully implements SCC-based dependency resolution and has been va
 
 ### Advanced Package Support
 - **Native package support** - Packages requiring compilation (node-gyp, Python)
-- **Optional dependencies** - Handle optionalDependencies in lockfile  
+- **Optional dependencies** - Handle optionalDependencies in lockfile
 - **Platform-specific packages** - Handle os/cpu constraints
 
 ### Tooling & UX

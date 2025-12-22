@@ -57,8 +57,8 @@ nix-build -E '
 # Build using the SCC-aware API (handles cycles)
 nix-build -E '
   let pkgs = import <nixpkgs> {};
-      pnpm2nixSCC = import ./pnpm2nix-scc.nix { 
-        inherit pkgs; 
+      pnpm2nixSCC = import ./pnpm2nix-scc.nix {
+        inherit pkgs;
         tarjanPath = "/path/to/tarjan-cli";
       };
   in pnpm2nixSCC.mkPnpmPackage {
@@ -76,7 +76,7 @@ nix-build -E '
 - **`workspace`**: Path to workspace root (where `pnpm-lock.yaml` exists)
 - **`components`**: Array of component paths relative to workspace (currently handles first component)
 - **`name`**: Optional package name (auto-detected from package.json if omitted)
-- **`version`**: Optional version (defaults to "1.0.0" or package.json version)  
+- **`version`**: Optional version (defaults to "1.0.0" or package.json version)
 - **`script`**: Build script to run (e.g., "build", "compile") - empty string skips building
 
 ### Build Process
@@ -91,7 +91,7 @@ nix-build -E '
 The system treats `pnpm-lock.yaml` as a solved dependency specification rather than reimplementing PNPM's resolution logic:
 
 - **packages**: Direct npm package references
-- **snapshots**: Resolved dependency contexts (including peer dependency variations) 
+- **snapshots**: Resolved dependency contexts (including peer dependency variations)
 - **importers**: Workspace package dependency specifications
 - **Workspace detection**: Identifies `link:` dependencies to build workspace packages in topological order
 
@@ -109,7 +109,7 @@ The original `dynamic-derivations.nix` fails when PNPM lockfiles contain depende
 
 ### Solution Architecture
 1. **Cycle Detection**: Uses Tarjan's algorithm via external CLI tool to find SCCs in dependency graph
-2. **SCC Strategy**: 
+2. **SCC Strategy**:
    - **Singleton packages**: Get individual derivations (e.g., `lodash-4.17.21/{lodash@4.17.21}/`)
    - **Cyclic packages**: Share a single derivation (e.g., `browserslist-update-browserslist-db-cycle/{browserslist@4.25.0/, update-browserslist-db@1.1.3}/`)
 3. **Dependency Resolution**: Internal cycle references use relative symlinks (`../package`), external references use absolute derivation paths
@@ -122,7 +122,7 @@ The original `dynamic-derivations.nix` fails when PNPM lockfiles contain depende
     └── lib/
 
 /nix/store/def456-browserslist-update-browserslist-db-cycle/
-├── browserslist@4.25.0/     # Cyclic derivation  
+├── browserslist@4.25.0/     # Cyclic derivation
 │   └── node_modules/
 │       └── update-browserslist-db@ -> ../update-browserslist-db@1.1.3-browserslist@4.25.0-
 └── update-browserslist-db@1.1.3-browserslist@4.25.0-/

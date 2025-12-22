@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
-  buildInputs = [ 
+  buildInputs = [
     pkgs.nodejs
     pkgs.nodePackages.pnpm
     pkgs.yaml2json

@@ -12,7 +12,7 @@ assert(chunks.length === 2, 'Lodash should work correctly');
 console.log('✓ Lodash dependency works in utils component');
 
 const coloredText = chalk.red('test');
-assert(typeof coloredText === 'string', 'Chalk should work correctly'); 
+assert(typeof coloredText === 'string', 'Chalk should work correctly');
 console.log('✓ Chalk transitive dependency works in utils component');
 
 const isString = is.string('test');
