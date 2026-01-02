@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {}, tarjanCli ? (import ./tarjan-cli.nix { inherit pkgs; }) }:
 
 {
-  mkPnpmPackage = { workspace, component, name ? null, version ? "1.0.0", script ? "build", buildInputs ? [] }:
+  mkPnpmPackage = { workspace, component ? ".", name ? null, version ? "1.0.0", script ? "build", buildInputs ? [] }:
     let
       src = workspace + "/${component}";
 
