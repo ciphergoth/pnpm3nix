@@ -1,9 +1,9 @@
-{ pkgs ? import <nixpkgs> {}, tarjanSrc ? /Users/paul/g/zerbongle/tarjan }:
+{ pkgs ? import <nixpkgs> {} }:
 
 let
-  # Pin to specific git commit for reproducibility
+  # Fetch from private GitHub repo over SSH
   pinnedSrc = builtins.fetchGit {
-    url = tarjanSrc;
+    url = "git@github.com:ciphergoth/tarjan-cli.git";
     rev = "f27f8bf4213467746877e44f1ed15fba720e2bff";
   };
 in
