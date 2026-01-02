@@ -4,13 +4,13 @@ let
   # Fetch from private GitHub repo over SSH
   pinnedSrc = builtins.fetchGit {
     url = "git@github.com:ciphergoth/tarjan-cli.git";
-    rev = "f27f8bf4213467746877e44f1ed15fba720e2bff";
+    rev = "9957acc802de54b1c618e787d1a3a5c02efe4d9c";
   };
 in
 
 pkgs.rustPlatform.buildRustPackage {
   pname = "tarjan-cli";
-  version = "0.1.0-f27f8bf";
+  version = "0.1.0-9957acc";
 
   src = pinnedSrc;
 
