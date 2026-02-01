@@ -1,9 +1,8 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
-  # Fetch from private GitHub repo over SSH
   pinnedSrc = builtins.fetchGit {
-    url = "git@github.com:ciphergoth/tarjan-cli.git";
+    url = "https://github.com/ciphergoth/tarjan-cli.git";
     rev = "9957acc802de54b1c618e787d1a3a5c02efe4d9c";
   };
 in
