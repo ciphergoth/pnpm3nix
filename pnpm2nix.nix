@@ -1,7 +1,7 @@
-{ pkgs ? import <nixpkgs> {}, tarjanCli ? (import ./tarjan-cli.nix { inherit pkgs; }) }:
+{ pkgs ? import <nixpkgs> {}, tarjanCli ? (import ./tarjan-cli.nix { pkgs = pkgs.buildPackages; }) }:
 
 {
-  mkPnpmPackage = { workspace, component ? ".", name ? null, version ? "1.0.0", script ? "build", buildInputs ? [] }:
+  mkPnpmPackage = { workspace, component ? ".", name ? null, version ? "1.0.0", script ? "build", nativeBuildInputs ? [] }:
     let
       src = workspace + "/${component}";
 
@@ -85,7 +85,7 @@
 
       inherit src;
 
-      buildInputs = [ pkgs.nodejs ] ++ buildInputs;
+      nativeBuildInputs = [ pkgs.nodejs ] ++ nativeBuildInputs;
 
       configurePhase = ''
         runHook preConfigure

@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {}, tarjanCli ? (import ./tarjan-cli.nix { inherit pkgs; }) }:
+{ pkgs ? import <nixpkgs> {}, tarjanCli ? (import ./tarjan-cli.nix { pkgs = pkgs.buildPackages; }) }:
 
 lockfilePath:
 
@@ -9,12 +9,33 @@ let
     src = lockfilePath;
   } ''yaml2json < $src > $out''));
 
-  # Get platform info from Node.js
-  platformInfo = builtins.fromJSON (builtins.readFile (pkgs.runCommand "platform-info" {
-    nativeBuildInputs = [ pkgs.nodejs ];
-  } ''
-    node -p "JSON.stringify({platform: process.platform, arch: process.arch})" > $out
-  ''));
+  # Derive target platform info from Nix's hostPlatform
+  nixKernelToNpmPlatform = {
+    darwin = "darwin";
+    linux = "linux";
+    freebsd = "freebsd";
+    openbsd = "openbsd";
+    netbsd = "netbsd";
+    windows = "win32";
+  };
+
+  nixCpuToNpmArch = {
+    x86_64 = "x64";
+    aarch64 = "arm64";
+    armv7l = "arm";
+    i686 = "ia32";
+    powerpc64le = "ppc64";
+    s390x = "s390x";
+    riscv64 = "riscv64";
+  };
+
+  hostPlatform = pkgs.stdenv.hostPlatform;
+  platformInfo = {
+    platform = nixKernelToNpmPlatform.${hostPlatform.parsed.kernel.name}
+      or (throw "Unsupported kernel for npm platform mapping: ${hostPlatform.parsed.kernel.name}");
+    arch = nixCpuToNpmArch.${hostPlatform.parsed.cpu.name}
+      or (throw "Unsupported CPU for npm arch mapping: ${hostPlatform.parsed.cpu.name}");
+  };
 
   packages = lockfileData.packages;
   snapshots = lockfileData.snapshots or {};
